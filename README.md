@@ -20,8 +20,6 @@ Five Pulumi stacks with intentional cross-stack dependencies, designed to demons
 
 ## One-time setup
 
-In each stack config, replace `organization` with your Pulumi org name:
-
 ```bash
 # 02-core-networking/Pulumi.dev.yaml
 context-api-core-networking:rgStackRef: <your-org>/context-api-resource-groups/dev
@@ -85,8 +83,13 @@ The graph query the agent should compose:
 
 ```json
 {
-  "anchor": { "nodeType": "stack", "query": "name:context-api-core-networking" },
-  "traverse": [{ "edgeType": "stackReference", "direction": "in", "hops": { "min": 1 } }],
+  "anchor": {
+    "nodeType": "stack",
+    "query": "name:context-api-core-networking"
+  },
+  "traverse": [
+    { "edgeType": "stackReference", "direction": "in", "hops": { "min": 1 } }
+  ],
   "return": { "select": ["traversed"] }
 }
 ```
@@ -121,10 +124,10 @@ The preview shows VNet + subnets as forced replacements. The context API already
 
 ## Stack outputs reference
 
-| Stack | Key outputs |
-|---|---|
+| Stack                | Key outputs                                                                      |
+| -------------------- | -------------------------------------------------------------------------------- |
 | `01-resource-groups` | `networkingResourceGroupName`, `sharedResourceGroupName`, `appResourceGroupName` |
-| `02-core-networking` | `vnetId`, `vnetName`, `vnetAddressSpaceOutput`, `appSubnetId`, `dbSubnetId` |
-| `03-app-secrets` | `keyVaultUri`, `keyVaultId`, `dbSecretUri`, `apiKeySecretUri` |
-| `04-webapp` | `appUrl`, `appName`, `appPrincipalId` |
-| `05-api-service` | `apiAppFqdn`, `apiAppName`, `apiPrincipalId` |
+| `02-core-networking` | `vnetId`, `vnetName`, `vnetAddressSpaceOutput`, `appSubnetId`, `dbSubnetId`      |
+| `03-app-secrets`     | `keyVaultUri`, `keyVaultId`, `dbSecretUri`, `apiKeySecretUri`                    |
+| `04-webapp`          | `appUrl`, `appName`, `appPrincipalId`                                            |
+| `05-api-service`     | `apiAppFqdn`, `apiAppName`, `apiPrincipalId`                                     |

@@ -1,4 +1,4 @@
 config:
-  context-api-app-secrets:rgStackRef: organization/context-api-resource-groups/dev
-  # tenantId is required — set to your Azure tenant ID
-  # context-api-app-secrets:tenantId: 00000000-0000-0000-0000-000000000000
+  context-api-app-secrets:rgStackRef: elisabeth-demo/context-api-resource-groups/dev
+  context-api-app-secrets:uniqueSuffix: elisa
+  context-api-app-secrets:tenantId: 706143bc-e1d4-4593-aee2-c9dc60ab9be7

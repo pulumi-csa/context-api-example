@@ -13,8 +13,9 @@ const location = rgStackRef.requireOutput("location_") as pulumi.Output<string>;
 const env = rgStackRef.requireOutput("environment") as pulumi.Output<string>;
 
 // Key Vault name must be globally unique and ≤24 chars.
-// We use a short prefix + env + a stable suffix derived from the stack name.
-const keyVaultName = pulumi.interpolate`kv-app-${env}-demo`;
+// uniqueSuffix should be a short string (e.g. initials) set via config.
+const uniqueSuffix = config.require("uniqueSuffix");
+const keyVaultName = pulumi.interpolate`kv-${env}-${uniqueSuffix}`;
 
 const keyVault = new azure.keyvault.Vault("key-vault", {
     resourceGroupName: sharedRgName,

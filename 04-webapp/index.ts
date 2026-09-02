@@ -3,15 +3,24 @@ import * as azure from "@pulumi/azure-native";
 
 const config = new pulumi.Config();
 
-// Two hard stack dependencies — this stack breaks if either upstream changes
+// Three hard stack dependencies — this stack breaks if any upstream changes
 // an output it exports. The context API's blast-radius query surfaces exactly
 // this chain when you ask "what depends on core-networking?".
+const rgStack = new pulumi.StackReference("rg-stack", {
+    name: config.require("rgStackRef"),
+});
 const networkingStack = new pulumi.StackReference("networking-stack", {
     name: config.require("networkingStackRef"),
 });
 const secretsStack = new pulumi.StackReference("secrets-stack", {
     name: config.require("secretsStackRef"),
 });
+
+// uniqueSuffix scopes globally-unique Azure resource names to this deployment.
+const uniqueSuffix = config.require("uniqueSuffix");
+
+// From resource-groups — use the RG that stack owns rather than creating a duplicate.
+const appRgName = rgStack.requireOutput("appResourceGroupName") as pulumi.Output<string>;
 
 // From core-networking
 const appSubnetId = networkingStack.requireOutput("appSubnetId") as pulumi.Output<string>;
@@ -23,28 +32,17 @@ const keyVaultUri = secretsStack.requireOutput("keyVaultUri") as pulumi.Output<s
 const keyVaultId = secretsStack.requireOutput("keyVaultId") as pulumi.Output<string>;
 const dbSecretUri = secretsStack.requireOutput("dbSecretUri") as pulumi.Output<string>;
 const apiKeySecretUri = secretsStack.requireOutput("apiKeySecretUri") as pulumi.Output<string>;
-const sharedRgName = secretsStack.requireOutput("sharedResourceGroupName") as pulumi.Output<string>;
 
-// App resource group comes from the location embedded in the networking stack's RG.
-// We re-use the same subscription/location; for simplicity we read it from config
-// or derive it. Here we use the networking RG's location via a data source.
 const networkingRg = azure.resources.getResourceGroupOutput({
     resourceGroupName: networkingRgName,
 });
 const location = networkingRg.location;
 
-// Create a dedicated app resource group for the webapp tier.
-const appRg = new azure.resources.ResourceGroup("app-rg", {
-    resourceGroupName: pulumi.interpolate`rg-app-${vnetName.apply(n => n.replace("vnet-", ""))}`,
-    location,
-    tags: { managedBy: "pulumi", stack: "webapp" },
-});
-
 // App Service Plan — P1v3 is the minimum tier that supports VNet integration.
 const appServicePlan = new azure.web.AppServicePlan("app-service-plan", {
-    resourceGroupName: appRg.name,
+    resourceGroupName: appRgName,
     location,
-    name: pulumi.interpolate`asp-${vnetName.apply(n => n.replace("vnet-", ""))}`,
+    name: pulumi.interpolate`asp-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
     kind: "Linux",
     reserved: true,
     sku: { name: "P1v3", tier: "PremiumV3" },
@@ -54,9 +52,9 @@ const appServicePlan = new azure.web.AppServicePlan("app-service-plan", {
 // The web app gets a system-assigned managed identity so it can pull secrets
 // from Key Vault without any credentials in config.
 const webApp = new azure.web.WebApp("web-app", {
-    resourceGroupName: appRg.name,
+    resourceGroupName: appRgName,
     location,
-    name: pulumi.interpolate`app-${vnetName.apply(n => n.replace("vnet-", ""))}-demo`,
+    name: pulumi.interpolate`app-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
     serverFarmId: appServicePlan.id,
     kind: "app,linux",
     identity: { type: "SystemAssigned" },
@@ -91,7 +89,7 @@ const webApp = new azure.web.WebApp("web-app", {
 // This is the direct dependency on core-networking — if the subnet is replaced,
 // this resource must be updated too, and the context API will show it.
 const vnetIntegration = new azure.web.WebAppSwiftVirtualNetworkConnection("vnet-integration", {
-    resourceGroupName: appRg.name,
+    resourceGroupName: appRgName,
     name: webApp.name,
     subnetResourceId: appSubnetId,
 });
@@ -110,5 +108,5 @@ const keyVaultRoleAssignment = new azure.authorization.RoleAssignment("kv-role-a
 export const appUrl = pulumi.interpolate`https://${webApp.defaultHostName}`;
 export const appName = webApp.name;
 export const appPrincipalId = webApp.identity.apply(i => i!.principalId);
-export const appResourceGroupName = appRg.name;
+export const appResourceGroupName = appRgName;
 export const vnetIntegrationSubnetId = appSubnetId;

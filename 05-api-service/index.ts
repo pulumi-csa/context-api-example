@@ -25,6 +25,9 @@ const keyVaultId = secretsStack.requireOutput("keyVaultId") as pulumi.Output<str
 const dbSecretUri = secretsStack.requireOutput("dbSecretUri") as pulumi.Output<string>;
 const apiKeySecretUri = secretsStack.requireOutput("apiKeySecretUri") as pulumi.Output<string>;
 
+// uniqueSuffix scopes globally-unique Azure resource names to this deployment.
+const uniqueSuffix = config.require("uniqueSuffix");
+
 // Derive location from the networking resource group.
 const networkingRg = azure.resources.getResourceGroupOutput({
     resourceGroupName: networkingRgName,
@@ -42,7 +45,7 @@ const apiRg = new azure.resources.ResourceGroup("api-rg", {
 const logWorkspace = new azure.operationalinsights.Workspace("log-workspace", {
     resourceGroupName: apiRg.name,
     location,
-    workspaceName: pulumi.interpolate`log-api-${vnetName.apply(n => n.replace("vnet-", ""))}`,
+    workspaceName: pulumi.interpolate`log-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
     sku: { name: "PerGB2018" },
     retentionInDays: 30,
     tags: { managedBy: "pulumi", stack: "api-service" },
@@ -60,7 +63,7 @@ const logWorkspaceKeys = azure.operationalinsights.getSharedKeysOutput({
 const containerEnv = new azure.app.ManagedEnvironment("container-env", {
     resourceGroupName: apiRg.name,
     location,
-    environmentName: pulumi.interpolate`cae-api-${vnetName.apply(n => n.replace("vnet-", ""))}`,
+    environmentName: pulumi.interpolate`cae-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
     appLogsConfiguration: {
         destination: "log-analytics",
         logAnalyticsConfiguration: {
@@ -80,7 +83,7 @@ const containerEnv = new azure.app.ManagedEnvironment("container-env", {
 const apiApp = new azure.app.ContainerApp("api-app", {
     resourceGroupName: apiRg.name,
     location,
-    containerAppName: pulumi.interpolate`ca-api-${vnetName.apply(n => n.replace("vnet-", ""))}`,
+    containerAppName: pulumi.interpolate`ca-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
     managedEnvironmentId: containerEnv.id,
     identity: { type: "SystemAssigned" },
     configuration: {

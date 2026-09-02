@@ -1,3 +1,4 @@
 config:
-  context-api-api-service:networkingStackRef: organization/context-api-core-networking/dev
-  context-api-api-service:secretsStackRef: organization/context-api-app-secrets/dev
+  context-api-api-service:networkingStackRef: elisabeth-demo/context-api-core-networking/dev
+  context-api-api-service:secretsStackRef: elisabeth-demo/context-api-app-secrets/dev
+  context-api-api-service:uniqueSuffix: elisa
