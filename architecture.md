@@ -14,7 +14,6 @@ graph LR
     KV[("Key Vault")]:::secrets
 
     Internet -->|HTTPS| WebApp
-    WebApp <-->|internal traffic| CA
     WebApp -->|managed identity| KV
     CA -->|managed identity| KV
 
