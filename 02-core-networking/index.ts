@@ -106,12 +106,18 @@ const appSubnet = new azure.network.Subnet("app-subnet", {
     networkSecurityGroup: { id: appNsg.id },
 });
 
-// DB subnet — private endpoints for data services live here.
+// DB subnet — Container Apps Environment and private endpoints for data services live here.
 const dbSubnet = new azure.network.Subnet("db-subnet", {
     resourceGroupName: networkingRgName,
     virtualNetworkName: vnet.name,
     subnetName: "snet-db",
     addressPrefix: dbSubnetPrefix,
+    delegations: [
+        {
+            name: "container-apps-delegation",
+            serviceName: "Microsoft.App/environments",
+        },
+    ],
     networkSecurityGroup: { id: dbNsg.id },
     privateEndpointNetworkPolicies: "Disabled",
 });
