@@ -1,0 +1,3 @@
+config:
+  azure-native:location: eastus
+  context-api-resource-groups:environment: dev

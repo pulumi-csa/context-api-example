@@ -1,0 +1,3 @@
+name: context-api-core-networking
+runtime: nodejs
+description: Core Azure networking — VNet, subnets, NSGs. Depends on context-api-resource-groups.

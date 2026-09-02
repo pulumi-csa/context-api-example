@@ -1,0 +1,3 @@
+config:
+  context-api-api-service:networkingStackRef: organization/context-api-core-networking/dev
+  context-api-api-service:secretsStackRef: organization/context-api-app-secrets/dev

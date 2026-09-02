@@ -1,0 +1,3 @@
+name: context-api-webapp
+runtime: nodejs
+description: Azure App Service with VNet integration and Key Vault secret references. Depends on core-networking and app-secrets.

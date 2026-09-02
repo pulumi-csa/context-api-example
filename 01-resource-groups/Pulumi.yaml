@@ -1,0 +1,3 @@
+name: context-api-resource-groups
+runtime: nodejs
+description: Shared Azure resource groups for the context API demo environment

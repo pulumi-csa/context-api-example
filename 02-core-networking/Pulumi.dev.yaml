@@ -1,0 +1,5 @@
+config:
+  context-api-core-networking:rgStackRef: organization/context-api-resource-groups/dev
+  context-api-core-networking:vnetAddressSpace: "10.0.0.0/16"
+  context-api-core-networking:appSubnetPrefix: "10.0.1.0/24"
+  context-api-core-networking:dbSubnetPrefix: "10.0.2.0/24"
