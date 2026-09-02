@@ -14,16 +14,12 @@ const secretsStack = new pulumi.StackReference("secrets-stack", {
 });
 
 // From core-networking
-const dbSubnetId = networkingStack.requireOutput("dbSubnetId") as pulumi.Output<string>;
-const vnetId = networkingStack.requireOutput("vnetId") as pulumi.Output<string>;
 const vnetName = networkingStack.requireOutput("vnetName") as pulumi.Output<string>;
 const networkingRgName = networkingStack.requireOutput("networkingResourceGroupName") as pulumi.Output<string>;
 
 // From app-secrets
 const keyVaultUri = secretsStack.requireOutput("keyVaultUri") as pulumi.Output<string>;
 const keyVaultId = secretsStack.requireOutput("keyVaultId") as pulumi.Output<string>;
-const dbSecretUri = secretsStack.requireOutput("dbSecretUri") as pulumi.Output<string>;
-const apiKeySecretUri = secretsStack.requireOutput("apiKeySecretUri") as pulumi.Output<string>;
 
 // uniqueSuffix scopes globally-unique Azure resource names to this deployment.
 const uniqueSuffix = config.require("uniqueSuffix");
@@ -57,9 +53,6 @@ const logWorkspaceKeys = azure.operationalinsights.getSharedKeysOutput({
 });
 
 // Container Apps Environment — VNet-integrated, running in the db subnet so
-// the API service can reach data services without traversing the internet.
-// This dependency on dbSubnetId is what the context API traces when you ask
-// "what is affected if core-networking changes?".
 const containerEnv = new azure.app.ManagedEnvironment("container-env", {
     resourceGroupName: apiRg.name,
     location,
@@ -70,10 +63,6 @@ const containerEnv = new azure.app.ManagedEnvironment("container-env", {
             customerId: logWorkspace.customerId,
             sharedKey: logWorkspaceKeys.apply(k => k.primarySharedKey!),
         },
-    },
-    vnetConfiguration: {
-        infrastructureSubnetId: dbSubnetId,
-        internal: true,
     },
     tags: { managedBy: "pulumi", stack: "api-service" },
 });
@@ -92,20 +81,6 @@ const apiApp = new azure.app.ContainerApp("api-app", {
             targetPort: 3000,
             transport: "http",
         },
-        secrets: [
-            {
-                name: "db-connection-string",
-                keyVaultUrl: dbSecretUri,
-                // identity references the system-assigned identity below —
-                // set after first deploy when principalId is available
-                identity: "system",
-            },
-            {
-                name: "third-party-api-key",
-                keyVaultUrl: apiKeySecretUri,
-                identity: "system",
-            },
-        ],
     },
     template: {
         containers: [
@@ -114,9 +89,11 @@ const apiApp = new azure.app.ContainerApp("api-app", {
                 image: "mcr.microsoft.com/k8se/quickstart:latest",
                 resources: { cpu: 0.25, memory: "0.5Gi" },
                 env: [
-                    { name: "DB_CONNECTION_STRING", secretRef: "db-connection-string" },
-                    { name: "THIRD_PARTY_API_KEY", secretRef: "third-party-api-key" },
+                    // The app uses its managed identity to fetch secrets from Key Vault
+                    // at runtime — no secret values embedded at creation time.
                     { name: "KEY_VAULT_URI", value: keyVaultUri },
+                    { name: "KEY_VAULT_DB_SECRET_NAME", value: pulumi.output("db-connection-string") },
+                    { name: "KEY_VAULT_API_KEY_NAME", value: pulumi.output("third-party-api-key") },
                     { name: "PORT", value: "3000" },
                 ],
             },
@@ -140,4 +117,3 @@ export const apiAppFqdn = apiApp.latestRevisionFqdn;
 export const apiPrincipalId = apiApp.identity.apply(i => i!.principalId);
 export const apiResourceGroupName = apiRg.name;
 export const containerEnvId = containerEnv.id;
-export const vnetIntegrationSubnetId = dbSubnetId;

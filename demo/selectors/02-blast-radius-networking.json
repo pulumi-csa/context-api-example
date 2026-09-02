@@ -1,0 +1,16 @@
+{
+  "scope": { "stacks": ["context-api-core-networking/dev"] },
+  "anchor": { "nodeType": "stack" },
+  "traverse": [
+    {
+      "edgeTypes": ["consumes_outputs_of"],
+      "direction": "in",
+      "depth": { "min": 1, "max": 5 },
+      "alias": "consumers"
+    }
+  ],
+  "return": {
+    "select": ["anchor", "consumers"],
+    "paths": true
+  }
+}
