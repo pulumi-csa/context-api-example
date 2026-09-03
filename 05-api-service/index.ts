@@ -13,7 +13,10 @@ const secretsStack = new pulumi.StackReference("secrets-stack", {
     name: config.require("secretsStackRef"),
 });
 
+const uniqueSuffix = config.require("uniqueSuffix");
+
 // From core-networking
+const appSubnetId = networkingStack.requireOutput("appSubnetId") as pulumi.Output<string>;
 const vnetName = networkingStack.requireOutput("vnetName") as pulumi.Output<string>;
 const networkingRgName = networkingStack.requireOutput("networkingResourceGroupName") as pulumi.Output<string>;
 
@@ -21,86 +24,53 @@ const networkingRgName = networkingStack.requireOutput("networkingResourceGroupN
 const keyVaultUri = secretsStack.requireOutput("keyVaultUri") as pulumi.Output<string>;
 const keyVaultId = secretsStack.requireOutput("keyVaultId") as pulumi.Output<string>;
 
-// uniqueSuffix scopes globally-unique Azure resource names to this deployment.
-const uniqueSuffix = config.require("uniqueSuffix");
-
-// Derive location from the networking resource group.
 const networkingRg = azure.resources.getResourceGroupOutput({
     resourceGroupName: networkingRgName,
 });
 const location = networkingRg.location;
+const env = vnetName.apply(n => n.replace("vnet-", ""));
 
-// The API service gets its own resource group.
+// Dedicated resource group for the API service tier.
 const apiRg = new azure.resources.ResourceGroup("api-rg", {
-    resourceGroupName: pulumi.interpolate`rg-api-${vnetName.apply(n => n.replace("vnet-", ""))}`,
+    resourceGroupName: pulumi.interpolate`rg-api-${env}`,
     location,
     tags: { managedBy: "pulumi", stack: "api-service" },
 });
 
-// Log Analytics workspace — required by Container Apps Environment.
-const logWorkspace = new azure.operationalinsights.Workspace("log-workspace", {
+const appServicePlan = new azure.web.AppServicePlan("api-plan", {
     resourceGroupName: apiRg.name,
     location,
-    workspaceName: pulumi.interpolate`log-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
-    sku: { name: "PerGB2018" },
-    retentionInDays: 30,
+    name: pulumi.interpolate`asp-api-${env}-${uniqueSuffix}`,
+    kind: "Linux",
+    reserved: true,
+    sku: { name: "P1v3", tier: "PremiumV3" },
     tags: { managedBy: "pulumi", stack: "api-service" },
 });
 
-const logWorkspaceKeys = azure.operationalinsights.getSharedKeysOutput({
-    resourceGroupName: apiRg.name,
-    workspaceName: logWorkspace.name,
-});
-
-// Container Apps Environment — VNet-integrated, running in the db subnet so
-const containerEnv = new azure.app.ManagedEnvironment("container-env", {
+const apiApp = new azure.web.WebApp("api-app", {
     resourceGroupName: apiRg.name,
     location,
-    environmentName: pulumi.interpolate`cae-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
-    appLogsConfiguration: {
-        destination: "log-analytics",
-        logAnalyticsConfiguration: {
-            customerId: logWorkspace.customerId,
-            sharedKey: logWorkspaceKeys.apply(k => k.primarySharedKey!),
-        },
-    },
-    tags: { managedBy: "pulumi", stack: "api-service" },
-});
-
-// The API container app itself. Uses a managed identity to pull secrets from
-// Key Vault — same pattern as the webapp.
-const apiApp = new azure.app.ContainerApp("api-app", {
-    resourceGroupName: apiRg.name,
-    location,
-    containerAppName: pulumi.interpolate`ca-api-${vnetName.apply(n => n.replace("vnet-", ""))}-${uniqueSuffix}`,
-    managedEnvironmentId: containerEnv.id,
+    name: pulumi.interpolate`api-${env}-${uniqueSuffix}`,
+    serverFarmId: appServicePlan.id,
+    kind: "app,linux",
     identity: { type: "SystemAssigned" },
-    configuration: {
-        ingress: {
-            external: false,
-            targetPort: 3000,
-            transport: "http",
-        },
-    },
-    template: {
-        containers: [
-            {
-                name: "api",
-                image: "mcr.microsoft.com/k8se/quickstart:latest",
-                resources: { cpu: 0.25, memory: "0.5Gi" },
-                env: [
-                    // The app uses its managed identity to fetch secrets from Key Vault
-                    // at runtime — no secret values embedded at creation time.
-                    { name: "KEY_VAULT_URI", value: keyVaultUri },
-                    { name: "KEY_VAULT_DB_SECRET_NAME", value: pulumi.output("db-connection-string") },
-                    { name: "KEY_VAULT_API_KEY_NAME", value: pulumi.output("third-party-api-key") },
-                    { name: "PORT", value: "3000" },
-                ],
-            },
+    siteConfig: {
+        linuxFxVersion: "NODE|20-lts",
+        alwaysOn: true,
+        appSettings: [
+            { name: "KEY_VAULT_URI", value: keyVaultUri },
         ],
-        scale: { minReplicas: 1, maxReplicas: 5 },
     },
+    httpsOnly: true,
     tags: { managedBy: "pulumi", stack: "api-service" },
+});
+
+// VNet integration — same app subnet as the webapp. Both apps sharing the
+// delegated subnet is valid; the subnet is delegated to Microsoft.Web/serverFarms.
+const vnetIntegration = new azure.web.WebAppSwiftVirtualNetworkConnection("vnet-integration", {
+    resourceGroupName: apiRg.name,
+    name: apiApp.name,
+    subnetResourceId: appSubnetId,
 });
 
 const kvSecretsUserRole = "/providers/Microsoft.Authorization/roleDefinitions/4633458b-17de-408a-b874-0445c86b69e6";
@@ -112,8 +82,7 @@ const keyVaultRoleAssignment = new azure.authorization.RoleAssignment("kv-role-a
     principalType: "ServicePrincipal",
 });
 
+export const apiUrl = pulumi.interpolate`https://${apiApp.defaultHostName}`;
 export const apiAppName = apiApp.name;
-export const apiAppFqdn = apiApp.latestRevisionFqdn;
 export const apiPrincipalId = apiApp.identity.apply(i => i!.principalId);
 export const apiResourceGroupName = apiRg.name;
-export const containerEnvId = containerEnv.id;
