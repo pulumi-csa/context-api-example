@@ -4,14 +4,16 @@ import * as azure from "@pulumi/azure-native";
 const config = new pulumi.Config();
 const env = config.require("environment");
 const location = config.get("location") ?? "eastus";
+const lastModified = new Date().toISOString();
+const modifiedBy = process.env.USER ?? process.env.USERNAME ?? "pulumi";
 
 const commonTags = {
     environment: env,
     managedBy: "pulumi",
     stack: "resource-groups",
-    "last-modified": "2025-01-01T00:00:00Z",
-    "modified-by": "pulumi",
-    "change-reason": "initial-deployment",
+    "last-modified": lastModified,
+    "modified-by": modifiedBy,
+    "change-reason": "add-required-change-tracking-and-cost-management-tags",
     "cost-center": "engineering",
     project: "context-api-demo",
     owner: "platform",
